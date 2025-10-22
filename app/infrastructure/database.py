@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from infrastructure.models import Base
+from app.infrastructure.models import Base
 
 # SQLite database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./string_analysis.db"
