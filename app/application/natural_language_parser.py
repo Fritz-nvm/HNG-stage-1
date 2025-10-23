@@ -39,51 +39,63 @@ class NaturalLanguageParser:
             "vowels": [r"vowel", r"[aeiou]"],
         }
 
-        self.vowels = {"a", "e", "i", "o", "u"}
-
     def parse_query(self, query: str) -> Dict[str, Any]:
-        """
-        Parse natural language query and convert to filters
-        """
+        """Parse natural language query and convert to filters"""
+        print(f"🔍 NLP Parser received query: '{query}'")
+
+        if not query or not query.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Query cannot be empty"
+            )
+
         query_lower = query.lower().strip()
         filters = {}
 
         try:
             # Check for palindrome
-            if any(
-                re.search(pattern, query_lower)
-                for pattern in self.patterns["palindrome"]
-            ):
-                filters["is_palindrome"] = True
+            for pattern in self.patterns["palindrome"]:
+                if re.search(pattern, query_lower):
+                    filters["is_palindrome"] = True
+                    print(f"✅ Found palindrome pattern: {pattern}")
+                    break
 
             # Parse word count
             word_count = self._parse_word_count(query_lower)
             if word_count is not None:
                 filters["word_count"] = word_count
+                print(f"✅ Found word_count: {word_count}")
 
             # Parse length filters
             length_filters = self._parse_length_filters(query_lower)
-            filters.update(length_filters)
+            if length_filters:
+                filters.update(length_filters)
+                print(f"✅ Found length filters: {length_filters}")
 
             # Parse character containment
             char_filter = self._parse_character_filter(query_lower)
             if char_filter:
                 filters["contains_character"] = char_filter
+                print(f"✅ Found character filter: {char_filter}")
 
             # Handle vowel references
             if any(
                 re.search(pattern, query_lower) for pattern in self.patterns["vowels"]
             ):
-                # Default to 'a' as the first vowel if no specific character is mentioned
                 if "contains_character" not in filters:
                     filters["contains_character"] = "a"
+                    print("✅ Added default vowel 'a'")
 
-            # Validate no conflicting filters
+            print(f"📊 Final filters extracted: {filters}")
+
+            # Validate filters
             self._validate_filters(filters)
 
             return filters
 
+        except HTTPException:
+            raise
         except Exception as e:
+            print(f"❌ Error in parse_query: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Unable to parse natural language query: {str(e)}",
@@ -155,25 +167,20 @@ class NaturalLanguageParser:
     def _parse_character_filter(self, query: str) -> Optional[str]:
         """Parse character containment filters"""
         # Specific letter mentioned
-        match = re.search(r"contain(?:s|ing)? the letter ([a-zA-Z])", query)
-        if match:
-            return match.group(1).lower()
+        patterns = [
+            r"contain(?:s|ing)? the letter ([a-zA-Z])",
+            r"contain(?:s|ing)? ([a-zA-Z])",
+            r"has the letter ([a-zA-Z])",
+            r"with ([a-zA-Z])",
+            r"that have ([a-zA-Z])",
+        ]
 
-        match = re.search(r"contain(?:s|ing)? ([a-zA-Z])", query)
-        if match:
-            return match.group(1).lower()
-
-        match = re.search(r"has the letter ([a-zA-Z])", query)
-        if match:
-            return match.group(1).lower()
-
-        match = re.search(r"with ([a-zA-Z])", query)
-        if match:
-            return match.group(1).lower()
-
-        match = re.search(r"that have ([a-zA-Z])", query)
-        if match:
-            return match.group(1).lower()
+        for pattern in patterns:
+            match = re.search(pattern, query)
+            if match:
+                char = match.group(1).lower()
+                if char.isalpha() and len(char) == 1:
+                    return char
 
         return None
 
@@ -186,9 +193,9 @@ class NaturalLanguageParser:
                     detail="Conflicting filters: min_length cannot be greater than max_length",
                 )
 
-        # Check for empty filters (query understood but no valid filters extracted)
+        # Check for empty filters
         if not filters:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Unable to extract meaningful filters from the query",
+                detail="Unable to extract meaningful filters from the query. Try terms like 'palindrome', 'single word', 'with a', or 'longer than 5'.",
             )
