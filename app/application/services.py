@@ -3,6 +3,7 @@ from typing import Dict, Optional, List, Any
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.infrastructure.models import StringAnalysis, StringProperties, StringAnalysisDB
+from fastapi import HTTPException, status
 
 
 class StringAnalysisService:
@@ -56,39 +57,36 @@ class StringAnalysisService:
             created_at=db_analysis.created_at,
         )
 
-    def get_analyses_by_natural_language(
-    self, 
-    db: Session,
-    query: str
-):
-    """
-    Get analyses using natural language query
-    Returns tuple of (analyses, parsed_filters)
-    """
-    print(f"🎯 Service layer processing NLP query: '{query}'")
-    
-    try:
-        # Parse natural language query
-        parsed_filters = self.nlp_parser.parse_query(query)
-        print(f"✅ Service received parsed filters: {parsed_filters}")
-        
-        # Use existing filtered analysis method
-        analyses = self.get_filtered_analyses(db, **parsed_filters)
-        print(f"✅ Service found {len(analyses)} matching analyses")
-        
-        return analyses, parsed_filters
-        
-    except HTTPException as he:
-        print(f"❌ Service caught HTTPException: {he.detail}")
-        raise he
-    except Exception as e:
-        print(f"❌ Service caught unexpected error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unable to process natural language query: {str(e)}"
-        )
+    def get_analyses_by_natural_language(self, db: Session, query: str):
+        """
+        Get analyses using natural language query
+        Returns tuple of (analyses, parsed_filters)
+        """
+        print(f"🎯 Service layer processing NLP query: '{query}'")
+
+        try:
+            # Parse natural language query
+            parsed_filters = self.nlp_parser.parse_query(query)
+            print(f"✅ Service received parsed filters: {parsed_filters}")
+
+            # Use existing filtered analysis method
+            analyses = self.get_filtered_analyses(db, **parsed_filters)
+            print(f"✅ Service found {len(analyses)} matching analyses")
+
+            return analyses, parsed_filters
+
+        except HTTPException as he:
+            print(f"❌ Service caught HTTPException: {he.detail}")
+            raise he
+        except Exception as e:
+            print(f"❌ Service caught unexpected error: {str(e)}")
+            import traceback
+
+            traceback.print_exc()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unable to process natural language query: {str(e)}",
+            )
 
     def get_filtered_analyses(
         self,
